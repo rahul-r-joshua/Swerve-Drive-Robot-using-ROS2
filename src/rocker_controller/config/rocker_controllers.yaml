@@ -1,6 +1,7 @@
 controller_manager:
   ros__parameters:
-    update_rate: 100  # Hz
+    update_rate: 1000
+    use_sim_time: true
 
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
@@ -11,6 +12,12 @@ controller_manager:
     swerve_steering_controller:
       type: position_controllers/JointGroupPositionController
 
+    rocker_left_controller:
+      type: position_controllers/JointGroupPositionController
+
+    rocker_right_controller:
+      type: position_controllers/JointGroupPositionController
+
 simple_velocity_controller:
   ros__parameters:
     joints:
@@ -18,6 +25,14 @@ simple_velocity_controller:
       - fl_wheel_joint
       - rl_wheel_joint
       - rr_wheel_joint
+    publish_rate: 50.0
+    cmd_vel_timeout: 0.25
+    velocity_limits:
+      max_velocity: 10.0
+      min_velocity: -10.0
+    acceleration_limits:
+      max_acceleration: 20.0
+      min_acceleration: -20.0
 
 swerve_steering_controller:
   ros__parameters:
@@ -26,3 +41,69 @@ swerve_steering_controller:
       - steer_fr_joint
       - steer_rl_joint
       - steer_rr_joint
+    publish_rate: 50.0
+    cmd_pos_timeout: 0.25
+    cmd_vel_timeout: 0.25
+    base_frame_id: base_footprint
+    publish_limited_velocity: true
+    publish_wheel_data: true
+    enable_odom_tf: True 
+    velocity_limits:
+      max_velocity: 5.0
+      min_velocity: -5.0
+    acceleration_limits:
+      max_acceleration: 10.0
+      min_acceleration: -10.0
+    linear:
+      x:
+        max_velocity: 1.0
+        min_velocity: -0.5
+        max_acceleration: 0.8
+        min_acceleration: -0.4
+      y:
+        max_velocity: 1.0
+        min_velocity: -1.0
+        max_acceleration: 0.8
+        min_acceleration: -0.8
+    angular:
+      z:
+        max_velocity: 1.7
+        min_velocity: -1.7
+        max_acceleration: 1.5
+        min_acceleration: -1.5
+
+rocker_left_controller:
+  ros__parameters:
+    joints:
+      - rocker_left_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+    position_limits:
+      min_position: -0.785
+      max_position: 0.785
+    velocity_limits:
+      max_velocity: 5.0
+      min_velocity: -5.0
+    acceleration_limits:
+      max_acceleration: 10.0
+      min_acceleration: -10.0
+
+rocker_right_controller:
+  ros__parameters:
+    joints:
+      - rocker_right_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+    position_limits:
+      min_position: -0.785
+      max_position: 0.785
+    velocity_limits:
+      max_velocity: 5.0
+      min_velocity: -5.0
+    acceleration_limits:
+      max_acceleration: 10.0
+      min_acceleration: -10.0

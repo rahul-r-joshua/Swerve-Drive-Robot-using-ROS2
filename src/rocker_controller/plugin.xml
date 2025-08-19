@@ -1,0 +1,9 @@
+<library path="simple_swerve_controller">
+  <class name="simple_swerve_controller::SimpleSwerveController"
+         type="simple_swerve_controller::SimpleSwerveController"
+         base_class_type="nav2_core::Controller">
+    <description>
+      A simple custom swerve controller for rocker robot.
+    </description>
+  </class>
+</library>

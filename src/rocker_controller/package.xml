@@ -4,7 +4,7 @@
   <name>rocker_controller</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="sivanigandupilli@gmail.com">ajay</maintainer>
+  <maintainer email="rahul.r.joshua123@gmail.com">ajay</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
@@ -12,10 +12,30 @@
   <exec_depend>ros2launch</exec_depend>
   <exec_depend>controller_manager</exec_depend>
 
+  <depend>control_msgs</depend>
+  <depend>gazebo_ros2_control</depend>
+  <depend>gazebo_ros</depend>
+  <depend>geometry_msgs</depend>
+  <depend>joint_state_broadcaster</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>robot_state_publisher</depend>
+  <depend>rclpy</depend>
+  <depend>ros2_controllers</depend>
+  <depend>std_msgs</depend>
+
+  <depend>nav2_core</depend>
+  <depend>nav2_costmap_2d</depend>
+  <depend>nav2_util</depend>
+  <depend>pluginlib</depend>
+
+  <exec_depend>tf_transformations</exec_depend>
+
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
-
+  
   <export>
-    <build_type>ament_cmake</build_type>
-  </export>
+  <build_type>ament_cmake</build_type>
+  <nav2_core plugin="${prefix}/simple_controller_plugin.xml" />
+</export>
 </package>

@@ -2,7 +2,7 @@
 
 <robot name="rocker" xmlns:xacro="http://ros.org/wiki/xacro">
   
-  <!-- Wheels -->
+
   <gazebo reference="fl_wheel">
     <mu1>1.0</mu1>
     <mu2>1.0</mu2>
@@ -72,31 +72,50 @@
   </gazebo>
 
   <gazebo>
-    <!-- ROS 2 Control Plugin -->
-    <plugin filename="ign_ros2_control-system" name="ign_ros2_control::IgnitionROS2ControlPlugin">
-      <parameters>$(find rocker_controller)/config/rocker_controllers.yaml</parameters>
-    </plugin>
+    <xacro:if value="$(arg is_ignition)">
+      <plugin name="ign_ros2_control::IgnitionROS2ControlPlugin" filename="ign_ros2_control-system">
+        <parameters>$(find rocker_controller)/config/rocker_controllers.yaml</parameters>
+      </plugin>
 
-    <!-- IMU Sensor System -->
-    <plugin filename="ignition-gazebo-imu-system" name="ignition::gazebo::systems::Imu"/>
+      <plugin name="ignition::gazebo::systems::Imu" filename="ignition-gazebo-imu-system" />
 
-    <!-- Sensor Management System -->
-    <plugin filename="ignition-gazebo-sensors-system" name="ignition::gazebo::systems::Sensors"/>
+      <plugin name="ignition::gazebo::systems::Sensors" filename="ignition-gazebo-sensors-system">
+        <render_engine>ogre2</render_engine>
+      </plugin>
+    </xacro:if>
+
+    <xacro:unless value="$(arg is_ignition)">
+      <plugin name="gz_ros2_control::GazeboSimROS2ControlPlugin" filename="gz_ros2_control-system">
+        <parameters>$(find rocker_controller)/config/rocker_controllers.yaml</parameters>
+      </plugin>
+
+      <plugin name="gz::sim::systems::Imu" filename="gz-sim-imu-system" />
+
+      <plugin name="gz::sim::systems::Sensors" filename="gz-sim-sensors-system">
+        <render_engine>ogre2</render_engine>
+      </plugin>
+    </xacro:unless>
   </gazebo>
-  <!-- Detachable Joint Plugin to Simulate Multi-Parent (e.g., 4-bar style) -->
+
   <gazebo>
-    <plugin filename="libgz-sim-detachable-joint-system.so" name="gz::sim::systems::DetachableJoint">
-      <parent_link>rocker_left</parent_link>
-      <child_model>bot</child_model>   
-      <child_link>turnbuckle_left</child_link>
-      <attach_topic>attach_diff_to_left</attach_topic>
-    </plugin>
-    <plugin filename="libgz-sim-detachable-joint-system.so" name="gz::sim::systems::DetachableJoint">
-      <parent_link>rocker_right</parent_link>
-      <child_model>bot</child_model>   
-      <child_link>turnbuckle_right</child_link>
-      <attach_topic>attach_diff_to_right</attach_topic>
-    </plugin>
-  </gazebo>
+  <plugin filename="libgz-sim-detachable-joint-system.so" name="gz::sim::systems::DetachableJoint">
+    <parent_link>rocker_left</parent_link>
+    <child_model>bot</child_model>   
+    <child_link>turnbuckle_left</child_link>
+    <detach_topic>detach_diff_from_left</detach_topic>
+    <attach_topic>attach_diff_to_left</attach_topic>
+    <output_topic>left_detach_status</output_topic>
+  </plugin>
+
+
+  <plugin filename="libgz-sim-detachable-joint-system.so" name="gz::sim::systems::DetachableJoint">
+    <parent_link>rocker_right</parent_link>
+    <child_model>bot</child_model>   
+    <child_link>turnbuckle_right</child_link>
+    <detach_topic>detach_diff_from_right</detach_topic>
+    <attach_topic>attach_diff_to_right</attach_topic>
+    <output_topic>right_detach_status</output_topic>
+  </plugin>
+</gazebo>
 
 </robot>
