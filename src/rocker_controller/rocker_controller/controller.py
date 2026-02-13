@@ -9,16 +9,20 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, TwistStamped, Quaternion, TransformStamped
 from std_msgs.msg import Float64MultiArray
 from tf2_ros import TransformBroadcaster
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 import tf_transformations
 
 
 class SwerveControllerAndOdometry(Node):
+
     def __init__(self):
         super().__init__('swerve_controller_and_odometry')
 
+        # Subscriptions
         self.create_subscription(TwistStamped, 'rocker_controller/cmd_vel', self.cmd_vel_st_cb, 10)
         self.create_subscription(JointState, 'joint_states', self.joint_state_cb, 50)
 
+        # Publishers
         self.steering_pub = self.create_publisher(Float64MultiArray, 'swerve_steering_controller/commands', 10)
         self.velocity_pub = self.create_publisher(Float64MultiArray, 'simple_velocity_controller/commands', 10)
         self.rocker_pub = self.create_publisher(Float64MultiArray, 'rocker_controller/commands', 10)
@@ -26,27 +30,84 @@ class SwerveControllerAndOdometry(Node):
         self.twist_pub = self.create_publisher(Twist, 'measured_twist', 10)
         self.twist_pub_st = self.create_publisher(TwistStamped, 'measured_twist_stamped', 10)
 
+        # TF broadcasters
         self.tf_br = TransformBroadcaster(self)
+        self.static_br = StaticTransformBroadcaster(self)
 
+        # Publish static transforms once
+        self.publish_static_transforms()
+
+        # Robot parameters
         self.wheel_base = 0.40
         self.track_width = 0.22
         self.wheel_radius = 0.05
 
-        self.turnbuckle_joints = ['turnbuckle_left_joint', 'turnbuckle_right_joint']
-        self.turnbuckle_offsets = {
-            'turnbuckle_left': ( -0.04188,  0.111, 0.022998),  
-            'turnbuckle_right': (-0.04188, -0.111, 0.022998)
-        }
-        self.turnbuckle_rpy = (math.pi / 2, 0.0, math.pi / 2)  
-        self.diff_link_offset = (0.072, 0.0, 0.066)
-
         self.steering_names = ['steer_fl_joint', 'steer_fr_joint', 'steer_rl_joint', 'steer_rr_joint']
         self.wheel_names = ['fl_wheel_joint', 'fr_wheel_joint', 'rl_wheel_joint', 'rr_wheel_joint']
-        self.x = self.y = self.yaw = 0.0
+
+        self.x = 0.0
+        self.y = 0.0
+        self.yaw = 0.0
         self.last_time = self.get_clock().now()
 
-        self.pos, self.vel = {}, {}
+        self.pos = {}
+        self.vel = {}
 
+    # ==============================
+    # Static TF
+    # ==============================
+    def publish_static_transforms(self):
+
+        static_transforms = []
+
+        # base_link → diff_link
+        t1 = TransformStamped()
+        t1.header.stamp = self.get_clock().now().to_msg()
+        t1.header.frame_id = 'base_link'
+        t1.child_frame_id = 'diff_link'
+        t1.transform.translation.x = 0.0719999263371985
+        t1.transform.translation.y = -1.02373561229607E-05
+        t1.transform.translation.z = 0.0659981514243161
+        t1.transform.rotation.w = 1.0
+        static_transforms.append(t1)
+
+        # diff_link → turnbuckle_left
+        q_left = tf_transformations.quaternion_from_euler(1.5708, 0.0, 1.5708)
+
+        t2 = TransformStamped()
+        t2.header.stamp = self.get_clock().now().to_msg()
+        t2.header.frame_id = 'diff_link'
+        t2.child_frame_id = 'turnbuckle_left'
+        t2.transform.translation.x = -0.04188
+        t2.transform.translation.y = 0.111
+        t2.transform.translation.z = 0.022998
+        t2.transform.rotation.x = q_left[0]
+        t2.transform.rotation.y = q_left[1]
+        t2.transform.rotation.z = q_left[2]
+        t2.transform.rotation.w = q_left[3]
+        static_transforms.append(t2)
+
+        # diff_link → turnbuckle_right
+        q_right = tf_transformations.quaternion_from_euler(1.5708, 0.0, 1.5708)
+
+        t3 = TransformStamped()
+        t3.header.stamp = self.get_clock().now().to_msg()
+        t3.header.frame_id = 'diff_link'
+        t3.child_frame_id = 'turnbuckle_right'
+        t3.transform.translation.x = -0.04188
+        t3.transform.translation.y = -0.111
+        t3.transform.translation.z = 0.022998
+        t3.transform.rotation.x = q_right[0]
+        t3.transform.rotation.y = q_right[1]
+        t3.transform.rotation.z = q_right[2]
+        t3.transform.rotation.w = q_right[3]
+        static_transforms.append(t3)
+
+        self.static_br.sendTransform(static_transforms)
+
+    # ==============================
+    # Utility functions
+    # ==============================
     @staticmethod
     def _wrap_pi(a):
         return math.atan2(math.sin(a), math.cos(a))
@@ -58,11 +119,16 @@ class SwerveControllerAndOdometry(Node):
         return ang, False
 
     def _fk(self, vx, vy, wz):
-        wb2, tw2 = self.wheel_base / 2.0, self.track_width / 2.0
-        vec = {'fl': (vx - wz * tw2, vy + wz * wb2),
-               'fr': (vx + wz * tw2, vy + wz * wb2),
-               'rl': (vx - wz * tw2, vy - wz * wb2),
-               'rr': (vx + wz * tw2, vy - wz * wb2)}
+        wb2 = self.wheel_base / 2.0
+        tw2 = self.track_width / 2.0
+
+        vec = {
+            'fl': (vx - wz * tw2, vy + wz * wb2),
+            'fr': (vx + wz * tw2, vy + wz * wb2),
+            'rl': (vx - wz * tw2, vy - wz * wb2),
+            'rr': (vx + wz * tw2, vy - wz * wb2)
+        }
+
         angs, spds = [], []
         for k in ['fl', 'fr', 'rl', 'rr']:
             vx_i, vy_i = vec[k]
@@ -71,33 +137,28 @@ class SwerveControllerAndOdometry(Node):
             a, rev = self._normalize(a)
             spds.append(-s if rev else s)
             angs.append(a)
+
         return angs, spds
 
-    def _send_cmd(self, vx, vy, wz):
+    # ==============================
+    # Callbacks
+    # ==============================
+    def cmd_vel_st_cb(self, msg: TwistStamped):
+        angs, spds = self._fk(msg.twist.linear.x,
+                              msg.twist.linear.y,
+                              msg.twist.angular.z)
 
-        angs, spds = self._fk(vx, vy, wz)
         self.steering_pub.publish(Float64MultiArray(data=angs))
         self.velocity_pub.publish(Float64MultiArray(data=[spds[1], spds[0], spds[2], spds[3]]))
         self.rocker_pub.publish(Float64MultiArray(data=[0.0, 0.0]))
 
-    def joint_origin_transform(self, xyz):
-        roll, pitch, yaw = self.turnbuckle_rpy
-        origin_quat = tf_transformations.quaternion_from_euler(roll, pitch, yaw)
-        origin_mat = tf_transformations.quaternion_matrix(origin_quat)
-        origin_mat[0:3, 3] = np.array(xyz)
-        return origin_mat
-
-    def rotation_about_axis(self, angle, axis=(0, 0, -1)):
-        return tf_transformations.rotation_matrix(angle, axis)
-
-    def cmd_vel_st_cb(self, msg: TwistStamped):
-        self._send_cmd(msg.twist.linear.x, msg.twist.linear.y, msg.twist.angular.z)
-
     def joint_state_cb(self, msg: JointState):
+
         for i, n in enumerate(msg.name):
             self.pos[n] = msg.position[i]
             if i < len(msg.velocity):
                 self.vel[n] = msg.velocity[i]
+
         if not all(n in self.pos for n in self.steering_names):
             return
         if not all(n in self.vel for n in self.wheel_names):
@@ -106,24 +167,31 @@ class SwerveControllerAndOdometry(Node):
         phi = [self.pos[n] for n in self.steering_names]
         w = [self.vel[n] for n in self.wheel_names]
 
-        B = [val for a, w_i in zip(phi, w) for val in (w_i * self.wheel_radius * math.cos(a),
-                                                       w_i * self.wheel_radius * math.sin(a))]
+        B = []
+        for a, w_i in zip(phi, w):
+            B.append(w_i * self.wheel_radius * math.cos(a))
+            B.append(w_i * self.wheel_radius * math.sin(a))
         B = np.asarray(B)
 
-        rx, ry = self.wheel_base / 2.0, self.track_width / 2.0
+        rx = self.wheel_base / 2.0
+        ry = self.track_width / 2.0
+
         A = np.array([
             [1, 0, -ry], [0, 1, rx],
-            [1, 0, ry], [0, 1, rx],
+            [1, 0,  ry], [0, 1, rx],
             [1, 0, -ry], [0, 1, -rx],
-            [1, 0, ry], [0, 1, -rx]
+            [1, 0,  ry], [0, 1, -rx]
         ])
+
         vx, vy, wz = np.linalg.lstsq(A, B, rcond=None)[0]
 
-        now_msg = self.get_clock().now().to_msg()
-        dt = (rclpy.time.Time.from_msg(now_msg) - self.last_time).nanoseconds * 1e-9
-        if dt <= 0:
+        now = self.get_clock().now()
+        dt = (now - self.last_time).nanoseconds * 1e-9
+        if dt <= 0.0:
             return
-        self.last_time = rclpy.time.Time.from_msg(now_msg)
+
+        self.last_time = now
+        now_msg = now.to_msg()
 
         self.x += (vx * math.cos(self.yaw) - vy * math.sin(self.yaw)) * dt
         self.y += (vx * math.sin(self.yaw) + vy * math.cos(self.yaw)) * dt
@@ -142,12 +210,8 @@ class SwerveControllerAndOdometry(Node):
         od.twist.twist.linear.x = vx
         od.twist.twist.linear.y = vy
         od.twist.twist.angular.z = wz
-        self.odom_pub.publish(od)
 
-        tw = Twist()
-        tw.linear.x, tw.linear.y, tw.angular.z = vx, vy, wz
-        self.twist_pub.publish(tw)
-        self.twist_pub_st.publish(TwistStamped(header=od.header, twist=tw))
+        self.odom_pub.publish(od)
 
         t = TransformStamped()
         t.header.stamp = now_msg
@@ -157,43 +221,8 @@ class SwerveControllerAndOdometry(Node):
         t.transform.translation.y = self.y
         t.transform.translation.z = 0.0
         t.transform.rotation = quat
+
         self.tf_br.sendTransform(t)
-
-        
-        for joint_name, child_link in zip(self.turnbuckle_joints, ['turnbuckle_left', 'turnbuckle_right']):
-            angle = self.pos.get(joint_name, 0.0)
-            angle = -angle
-
-            origin_xyz = self.turnbuckle_offsets[child_link]
-            origin_mat = self.joint_origin_transform(origin_xyz)
-            rot_mat = self.rotation_about_axis(angle, axis=(0, 0, -1))
-            full_tf = np.dot(origin_mat, rot_mat)
-
-            translation = full_tf[0:3, 3]
-            rotation_quat = tf_transformations.quaternion_from_matrix(full_tf)
-
-            tf_msg = TransformStamped()
-            tf_msg.header.stamp = now_msg
-            tf_msg.header.frame_id = 'diff_link'
-            tf_msg.child_frame_id = child_link
-            tf_msg.transform.translation.x = translation[0]
-            tf_msg.transform.translation.y = translation[1]
-            tf_msg.transform.translation.z = translation[2]
-            tf_msg.transform.rotation.x = rotation_quat[0]
-            tf_msg.transform.rotation.y = rotation_quat[1]
-            tf_msg.transform.rotation.z = rotation_quat[2]
-            tf_msg.transform.rotation.w = rotation_quat[3]
-            self.tf_br.sendTransform(tf_msg)
-
-        tf_diff = TransformStamped()
-        tf_diff.header.stamp = now_msg
-        tf_diff.header.frame_id = 'base_link'
-        tf_diff.child_frame_id = 'diff_link'
-        tf_diff.transform.translation.x = self.diff_link_offset[0]
-        tf_diff.transform.translation.y = self.diff_link_offset[1]
-        tf_diff.transform.translation.z = self.diff_link_offset[2]
-        tf_diff.transform.rotation.w = 1.0
-        self.tf_br.sendTransform(tf_diff)
 
 
 def main(args=None):
@@ -206,3 +235,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+s
